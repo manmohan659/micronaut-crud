@@ -17,19 +17,27 @@ jobs:
   test-build-jar:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
+    env:
+      CI_DB_ROOT_PASSWORD: ${{ secrets.CI_DB_ROOT_PASSWORD }}
+      CI_DB_NAME: ${{ secrets.CI_DB_NAME }}
+      CI_DB_USERNAME: ${{ secrets.CI_DB_USERNAME }}
+      CI_DB_PASSWORD: ${{ secrets.CI_DB_PASSWORD }}
+      AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      S3_BUCKET: ${{ secrets.S3_BUCKET }}
 
     services:
       mysql:
         image: mysql:8.0
         env:
-          MYSQL_ROOT_PASSWORD: ${{ secrets.CI_DB_ROOT_PASSWORD }}
-          MYSQL_DATABASE: ${{ secrets.CI_DB_NAME }}
-          MYSQL_USER: ${{ secrets.CI_DB_USERNAME }}
-          MYSQL_PASSWORD: ${{ secrets.CI_DB_PASSWORD }}
+          MYSQL_ROOT_PASSWORD: ${{ env.CI_DB_ROOT_PASSWORD }}
+          MYSQL_DATABASE: ${{ env.CI_DB_NAME }}
+          MYSQL_USER: ${{ env.CI_DB_USERNAME }}
+          MYSQL_PASSWORD: ${{ env.CI_DB_PASSWORD }}
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -p${{ secrets.CI_DB_ROOT_PASSWORD }} --silent"
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -p$MYSQL_ROOT_PASSWORD --silent"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=20
@@ -68,9 +76,9 @@ jobs:
 
       - name: Build, test, and create JAR
         env:
-          DATASOURCES_DEFAULT_URL: jdbc:mysql://127.0.0.1:3306/${{ secrets.CI_DB_NAME }}
-          DATASOURCES_DEFAULT_USERNAME: ${{ secrets.CI_DB_USERNAME }}
-          DATASOURCES_DEFAULT_PASSWORD: ${{ secrets.CI_DB_PASSWORD }}
+          DATASOURCES_DEFAULT_URL: jdbc:mysql://127.0.0.1:3306/${{ env.CI_DB_NAME }}
+          DATASOURCES_DEFAULT_USERNAME: ${{ env.CI_DB_USERNAME }}
+          DATASOURCES_DEFAULT_PASSWORD: ${{ env.CI_DB_PASSWORD }}
         run: ./gradlew clean build shadowJar --no-daemon
 
       - name: Resolve JAR path
@@ -93,12 +101,12 @@ jobs:
           path: ${{ steps.jar.outputs.path }}
 
       - name: Configure AWS credentials
-        if: ${{ secrets.AWS_ROLE_TO_ASSUME != '' && secrets.AWS_REGION != '' && secrets.S3_BUCKET != '' }}
+        if: ${{ env.AWS_ROLE_TO_ASSUME != '' && env.AWS_REGION != '' && env.S3_BUCKET != '' }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Upload JAR to S3
-        if: ${{ secrets.AWS_ROLE_TO_ASSUME != '' && secrets.AWS_REGION != '' && secrets.S3_BUCKET != '' }}
-        run: aws s3 cp "${{ steps.jar.outputs.path }}" "s3://${{ secrets.S3_BUCKET }}/jars/${{ github.sha }}.jar"
+        if: ${{ env.AWS_ROLE_TO_ASSUME != '' && env.AWS_REGION != '' && env.S3_BUCKET != '' }}
+        run: aws s3 cp "${{ steps.jar.outputs.path }}" "s3://${{ env.S3_BUCKET }}/jars/${{ github.sha }}.jar"
