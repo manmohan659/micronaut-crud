@@ -201,3 +201,6 @@ public interface BookRepository extends JpaRepository<Book, Long> {
 }
 
 ```
+
+
+CI trigger update (2026-02-18): verify workflow on merged PR.
