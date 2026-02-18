@@ -11,6 +11,7 @@ on:
 permissions:
   contents: read
   id-token: write
+  packages: write
 
 jobs:
   test-build-jar:
@@ -79,6 +80,34 @@ jobs:
         with:
           name: micronaut-crud-jar-${{ github.sha }}
           path: ${{ steps.jar.outputs.path }}
+
+      - name: Prepare Docker context for GHCR
+        run: |
+          cp "${{ steps.jar.outputs.path }}" app.jar
+          cat > Dockerfile.ghcr <<'EOF'
+          FROM eclipse-temurin:21-jre
+          WORKDIR /app
+          COPY app.jar /app/app.jar
+          EXPOSE 8080
+          ENTRYPOINT ["java","-jar","/app/app.jar"]
+          EOF
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image to GHCR
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.ghcr
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}:${{ github.sha }}
+            ghcr.io/${{ github.repository }}:latest
 
       - name: Configure AWS credentials
         if: ${{ env.AWS_ROLE_TO_ASSUME != '' && env.AWS_REGION != '' && env.S3_BUCKET != '' }}
